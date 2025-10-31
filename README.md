@@ -1,3 +1,25 @@
+原项目地址：https://github.com/morettt/my-neuro
+
+基于原项目5.5.6版本进行的修改。
+
+用AIcoding给原项目大改了很多，目前测试3天无严重bug出现。
+
+使用指南：按照原项目5.5.6版本的教程部署后，然后整体用本项目的live-2d-develop文件夹替换掉原项目的live-2d或者live-2d-develop文件夹，和asr_api.py文件。
+
+之后在项目文件夹内打开终端
+
+cd live-2d-develop
+
+npm install jschardet
+
+conda activate my-neuro
+
+python test.py
+
+即可使用
+
+下面是修改内容相关：
+
 debug相关
 
 1 修改了asr-api.py中的模型加载路径，使得路径与按照Readme下载后的默认路径一致
