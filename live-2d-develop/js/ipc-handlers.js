@@ -31,6 +31,27 @@ class IPCHandlers {
         this.registerMusicHandlers();
         this.registerChatFocusHandler();
         this.registerSubtitleToggleHandler(); // 注册新处理器
+        this.registerASRToggleHandler();
+        this.registerRendererControlHandlers();
+    }
+
+        // --- 新增：渲染控制处理器 ---
+    registerRendererControlHandlers() {
+        // 停止渲染
+        ipcRenderer.on('renderer-stop', () => {
+            if (global.pixiApp && global.pixiApp.ticker) {
+                global.pixiApp.ticker.stop();
+                console.log('[Performance] PIXI渲染已暂停以节省资源');
+            }
+        });
+
+        // 恢复渲染
+        ipcRenderer.on('renderer-start', () => {
+            if (global.pixiApp && global.pixiApp.ticker) {
+                global.pixiApp.ticker.start();
+                console.log('[Performance] PIXI渲染已恢复');
+            }
+        });
     }
 
     // 中断信号处理
@@ -116,6 +137,15 @@ class IPCHandlers {
         ipcRenderer.on('toggle-subtitle-visibility', () => {
             if (this.uiController) {
                 this.uiController.forceShow();
+            }
+        });
+    
+    }
+    registerASRToggleHandler() {
+        ipcRenderer.on('toggle-asr', async () => {
+            logToTerminal('info', '接收到切换ASR状态信号');
+            if (this.voiceChat) {
+                await this.voiceChat.toggleASR();
             }
         });
     }

@@ -14,7 +14,6 @@ class ChatController {
         this.isVisible = false;
 
         this.handleKeyPress = this.handleKeyPress.bind(this);
-        this.handleDocumentClick = this.handleDocumentClick.bind(this);
     }
 
     async init() {
@@ -62,14 +61,11 @@ class ChatController {
         // ipcRenderer.send('set-ignore-mouse-events', { ignore: false });
         this.container.classList.add('visible');
         this.input.focus();
-
-        setTimeout(() => document.addEventListener('mousedown', this.handleDocumentClick), 0);
     }
 
     hide() {
         this.isVisible = false;
         this.container.classList.remove('visible');
-        document.removeEventListener('mousedown', this.handleDocumentClick);
 
         // 核心修复：手动触发一次鼠标移动事件，让 model-interaction.js 重新评估
         // 并根据鼠标是否在模型上，来决定是否恢复鼠标穿透。
@@ -80,12 +76,6 @@ class ChatController {
                 clientY: interaction.mouse.global.y,
             });
             document.dispatchEvent(event);
-        }
-    }
-
-    handleDocumentClick(e) {
-        if (this.isVisible && !this.container.contains(e.target)) {
-            this.hide();
         }
     }
 
@@ -120,7 +110,6 @@ class ChatController {
 
     destroy() {
         this.input.removeEventListener('keypress', this.handleKeyPress);
-        document.removeEventListener('mousedown', this.handleDocumentClick);
         ipcRenderer.removeAllListeners('window-blurred');
     }
 }

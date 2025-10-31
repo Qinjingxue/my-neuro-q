@@ -18,6 +18,9 @@ class ModelSetup {
         app.stage.position.set(window.innerWidth / 2, window.innerHeight / 2);
         app.stage.pivot.set(window.innerWidth / 2, window.innerHeight / 2);
 
+        // --- 核心优化：限制最大刷新率，防止在高刷显示器上性能过度消耗 ---
+        PIXI.Ticker.shared.maxFPS = 60;
+
         // 加载Live2D模型
         const model = await PIXI.live2d.Live2DModel.from("2D/肥牛/hiyori_pro_mic.model3.json");
         app.stage.addChild(model);

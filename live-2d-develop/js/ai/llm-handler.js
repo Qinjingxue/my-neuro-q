@@ -142,7 +142,6 @@ class LLMHandler {
                         }
 
                         logToTerminal('info', `发送工具结果到LLM获取最终回复`);
-
                         const finalResult = await llmClient.chatCompletion(this.messages);
 
                         logToTerminal('info', `获得最终LLM回复，开始语音输出`);
@@ -151,7 +150,7 @@ class LLMHandler {
                             this.messages.push({ 'role': 'assistant', 'content': finalResult.content });
                             this.saveConversationHistory();
                             logToTerminal('info', `获得最终LLM回复，开始语音输出`);
-                            this.ttsProcessor.reset();
+                            this.ttsProcessor.reset(); // <-- 核心修复：在这里重置TTS状态
                             this.ttsProcessor.processTextToSpeech(finalResult.content);
                         }
                     } else {
@@ -163,7 +162,7 @@ class LLMHandler {
                     this.messages.push({ 'role': 'assistant', 'content': result.content });
                     this.saveConversationHistory();
                     logToTerminal('info', `LLM直接返回回复，开始语音输出`);
-                    this.ttsProcessor.reset();
+                    this.ttsProcessor.reset(); // <-- 核心修复：在这里重置TTS状态
                     this.ttsProcessor.processTextToSpeech(result.content);
                 }
 

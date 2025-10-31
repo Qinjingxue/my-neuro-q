@@ -16,6 +16,7 @@ const { LLMClient } = require('./ai/llm-client.js');
 const { toolExecutor } = require('./ai/tool-executor.js');
 const { eventBus } = require('./core/event-bus.js');
 const { Events } = require('./core/events.js');
+const { ipcRenderer } = require('electron');
 
 class AppInitializer {
     constructor(config, modelController, onBarrageTTSComplete, enhanceSystemPrompt) {
@@ -179,17 +180,27 @@ class AppInitializer {
         }
     }
 
-    startWelcomeAndRecording() {
-        if (this.ttsEnabled) {
-            setTimeout(() => {
-                this.ttsProcessor.processTextToSpeech(this.INTRO_TEXT);
-            }, 1000);
+    async startWelcomeAndRecording() {
+        // 通过 IPC 从主进程获取启动状态
+        const isFirstLaunch = await ipcRenderer.invoke('get-launch-status');
+
+        // 只有在首次启动时才播放问候语
+        if (isFirstLaunch) {
+            console.log("首次启动，播放问候语...");
+            if (this.ttsEnabled) {
+                setTimeout(() => {
+                    this.ttsProcessor.processTextToSpeech(this.INTRO_TEXT);
+                }, 1000);
+            } else {
+                setTimeout(() => {
+                    this.uiController.addNewLine(`Fake Neuro: ${this.INTRO_TEXT}`, 3000);
+                }, 1000);
+            }
         } else {
-            setTimeout(() => {
-                this.uiController.addNewLine(`Fake Neuro: ${this.INTRO_TEXT}`, 3000);
-            }, 1000);
+            console.log("自动重载，跳过问候语。");
         }
 
+        // 启动录音和自动对话的逻辑在每次加载时都应该执行
         if (this.asrEnabled) {
             setTimeout(() => {
                 this.voiceChat.startRecording();

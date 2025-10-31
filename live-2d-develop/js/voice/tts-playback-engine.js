@@ -53,7 +53,6 @@ class TTSPlaybackEngine {
 
             this.isPlaying = true;
             if (this.onStartCallback) this.onStartCallback();
-            eventBus.emit(Events.TTS_START);
 
             this.currentAudioUrl = URL.createObjectURL(audioBlob);
             this.currentAudio = new Audio(this.currentAudioUrl);

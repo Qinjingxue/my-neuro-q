@@ -58,6 +58,7 @@ class VoiceChatFacade {
 
         // 同步初始化（异步部分在 initializeAsync 中完成）
         this.initializeSync(vadUrl, asrUrl);
+
     }
 
     /**
@@ -280,6 +281,18 @@ class VoiceChatFacade {
     setEmotionMapper(emotionMapper) {
         this.emotionMapper = emotionMapper;
         console.log('情绪动作映射器已设置到VoiceChat');
+    }
+
+        // ========== 新增：切换ASR的方法 ==========
+    async toggleASR() {
+        if (this.asrController) {
+            const newStatus = await this.asrController.toggleASR();
+            this.asrEnabled = newStatus; // 同步更新Facade自身的状态
+            console.log(`ASR 状态已切换为: ${newStatus ? '启用' : '禁用'}`);
+            return newStatus;
+        }
+        console.warn('ASR a控制器不存在，无法切换状态。');
+        return this.asrEnabled;
     }
 
     // ========== sendToLLM 方法（由LLMHandler重写） ==========

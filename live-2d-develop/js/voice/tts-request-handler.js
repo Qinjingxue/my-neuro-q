@@ -24,7 +24,7 @@ class TTSRequestHandler {
         this.translationSystemPrompt = config.translation?.system_prompt || "";
 
         // 标点符号
-        this.punctuations = [',', '。', '，', '？', '!', '！', '；', ';', '：', ':'];
+        this.punctuations = [',', '。', '，', '？', '!', '！', '；', ';', '：', ':','、'];
         this.pendingSegment = '';
 
         // 请求管理
@@ -106,7 +106,7 @@ class TTSRequestHandler {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         text: finalTextForTTS,
-                        text_language: this.language
+                        text_language: this.language,
                     }),
                     signal: controller.signal
                 });

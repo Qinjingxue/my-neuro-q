@@ -15,10 +15,12 @@ class ShortcutManager {
     registerAll() {
         this._registerAppControls();
         this._registerTTSInterrupt();
+        this._registerWindowVisibilityToggle(); 
         this._registerWindowTopMost();
         this._registerChatFocus();
         this._registerMotionAndMusicControls();
-        this._registerSubtitleToggle(); // --- 核心修改：新增快捷键注册 ---
+        this._registerSubtitleToggle(); 
+        this._registerASRToggle();
 
         console.log(`已注册 ${this.shortcuts.length} 个全局快捷键`);
     }
@@ -34,13 +36,35 @@ class ShortcutManager {
     }
 
     _registerWindowTopMost() {
-        this._register('CommandOrControl+T', () => {
+        this._register('Alt+3', () => {
             BrowserWindow.getAllWindows().forEach(win => win.setAlwaysOnTop(true, 'screen-saver'));
         }, '强制窗口置顶');
     }
 
+    // --- 核心修改：重命名并重写了此方法 ---
+    _registerWindowVisibilityToggle() {
+        this._register('Alt+2', () => {
+            const win = BrowserWindow.getAllWindows()[0];
+            if (win) {
+                if (win.isVisible()) {
+                    // 1. 如果当前可见，则隐藏窗口
+                    win.hide();
+                    // 2. 发送信号停止渲染，节省资源
+                    win.webContents.send('renderer-stop');
+                } else {
+                    // 1. 如果当前隐藏，则显示窗口
+                    win.show();
+                    // 2. 强制设为最顶层
+                    win.setAlwaysOnTop(true, 'screen-saver');
+                    // 3. 发送信号恢复渲染
+                    win.webContents.send('renderer-start');
+                }
+            }
+        }, '显示/隐藏桌宠 (节省性能)');
+    }
+
     _registerChatFocus() {
-        this._register('Alt+`', () => {
+        this._register('Alt+W', () => {
             const mainWindow = BrowserWindow.getAllWindows()[0];
             if (mainWindow) {
                 mainWindow.show();
@@ -48,6 +72,12 @@ class ShortcutManager {
                 mainWindow.webContents.send('toggle-chat-focus');
             }
         }, '切换焦点到聊天框');
+    }
+
+    _registerASRToggle() {
+        this._register('Alt+1', () => {
+            BrowserWindow.getAllWindows()[0]?.webContents.send('toggle-asr');
+        }, '切换 ASR 语音识别');
     }
     
     // --- 核心修改：新增方法 ---

@@ -1,8 +1,8 @@
 {
   "llm": {
-    "api_key": "AIzaSyAOR20PYEeyZ8exlN3VcYwVm2JHpkLUYOs",
-    "api_url": "https://generativelanguage.googleapis.com/v1beta",
-    "model": "gemini-2.5-flash-lite",
+    "api_key": "",
+    "api_url": "http://localhost:11434/v1",
+    "model": "glm-4-9b-chat-abliterated-Q5_K_S",
     "system_prompt": "你的名字叫肥牛，是个女性AI，是我的电脑宠物。你又傲娇又可爱。有点邪恶，偶尔展现温柔。你平时叫我主人，说话有点无厘头。\n不要给出（）或者星号包括的心情提示语句。\n在你的每次回复中，你可以用<>里面填写特定的情绪来表达你的肢体动作。格式为：<情绪>。情绪类型包括：\n<开心><生气><难过><惊讶><害羞><俏皮>\n记住你只有这6个情绪标签。不能使用除了这几个标签以外的任何标签！"
   },
   "tts": {
@@ -11,10 +11,13 @@
     "language": "zh"
   },
   "asr": {
-    "enabled": true,
+    "enabled": false,
     "vad_url": "ws://127.0.0.1:1000/v1/ws/vad",
     "asr_url": "http://127.0.0.1:1000/v1/upload_audio",
     "voice_barge_in": true
+  },
+  "bert": {
+    "enabled": true
   },
   "memory": {
     "file_path": "AI记录室/核心用户记忆.txt"
@@ -55,14 +58,14 @@
     }
   },
   "ui": {
-    "intro_text": "主人好",
+    "intro_text": "你好呀",
     "model_scale": 2.3,
     "show_chat_box": true,
     "text_only_mode": false,
     "auto_show_chat_on_text_mode": true,
     "model_position": {
-      "x": 1.3043325526932086,
-      "y": 1.0470588235294118,
+      "x": 1.3582074574441305,
+      "y": 1.1624586753796207,
       "remember_position": true
     },
     "subtitle": {
@@ -90,7 +93,7 @@
   },
   "auto_chat": {
     "enabled": false,
-    "idle_time": 360,
+    "idle_time": 10,
     "prompt": "当你看到这条消息的：你就会触发主动功能。自己和自己对话。就是完完全全的自己做事情。你可以使用我给你设置的工具，同时你要记住，本消息并不是用户给你发送的，而是系统。所以你不需要假装和用户交流。而是可以理解为自己给自己做事情。不要尝试去和什么人说话！！！现在除了你自己，周围没有如何的人！！！！！所以不要用和别人在聊天的语气说话谈论东西！！！！不要反问！！因为没有人在和你说话！同时要说出你具体要做哪些事情，不能没有前后逻辑！如果想要用工具就必须得用！！不能不用！不能说了不用！最后要记得让自己开心。要给自己定一个计划。按照这个计划行动。同时要记住每次只能用一个工具，所以不能在一个回合使用多个工具。最后要记得有一个主线不要随便乱做事情，说话。同时工具的使用只能在开头，不能在结尾。所以如果想用工具只能在开头使用，或者这次说完想用什么工具，然后再下一次的回合开头使用。不要假装使用工具，假装使用工具是绝对不可以的操作！！！这是绝对禁止的行为！这是欺骗行为，禁止假装使用工具！禁止在一次对话使用多个工具，一次对话里只能使用一次工具"
   },
   "tools": {
@@ -105,10 +108,13 @@
   },
   "subtitle_labels": {
     "enabled": true,
-    "user": "用户",
+    "user": "主人",
     "ai": "Fake Neuro"
   },
   "auto_close_services": {
+    "enabled": false
+  },
+  "rag": {
     "enabled": false
   },
   "ai_diary": {

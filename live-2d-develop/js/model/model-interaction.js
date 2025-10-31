@@ -17,6 +17,9 @@ this.dragOffset = { x: 0, y: 0 };
 this.chatDragOffset = { x: 0, y: 0 }; // NEW: Chatbox drag offset
 this.config = null;
 this.isOverInteractiveArea = false; // 新增：用于跟踪鼠标是否在交互区域上
+// --- 新增代码：存储窗口的先前尺寸 ---
+this.previousWidth = window.innerWidth;
+this.previousHeight = window.innerHeight;
 }
 
 // 初始化模型和应用
@@ -119,19 +122,26 @@ setupInteractivity() {
         }
     });
 
-    // --- 核心修复：统一的 Mousedown 处理器，处理事件优先级 ---
+    // --- 核心修改：增强 mousedown 处理器以管理聊天框 ---
     document.addEventListener('mousedown', (e) => {
-        // 检查是否点击了字幕拖拽或调整大小的手柄
         if (e.target === subtitleHandle || e.target === subtitleResizeHandle) {
-            // 事件由 ui-controller.js 处理，这里直接返回，阻止模型拖拽
             return;
         }
 
         const pixiPoint = new PIXI.Point();
         this.app.renderer.plugins.interaction.mapPositionToPoint(pixiPoint, e.clientX, e.clientY);
 
-        // 检查是否点击了聊天框
-        if (this.isPointInChatbox(pixiPoint)) {
+        const isOverChat = this.isPointInChatbox(pixiPoint);
+        const isOverModel = (
+            currentModel &&
+            pixiPoint.x >= this.interactionX &&
+            pixiPoint.x <= this.interactionX + this.interactionWidth &&
+            pixiPoint.y >= this.interactionY &&
+            pixiPoint.y <= this.interactionY + this.interactionHeight
+        );
+
+        // 优先级 1: 点击聊天框
+        if (isOverChat) {
             if (e.target !== chatInput) {
                 this.isDraggingChat = true;
                 this.chatDragOffset.x = e.clientX - chatContainer.getBoundingClientRect().left;
@@ -139,16 +149,24 @@ setupInteractivity() {
                 e.preventDefault();
                 ipcRenderer.send('set-ignore-mouse-events', { ignore: false });
             }
-            // 点击聊天框区域后，直接返回，阻止模型拖拽
+            // 点击聊天框区域后，直接返回，不执行后续逻辑
             return;
         }
 
-        // 如果以上都不是，最后检查是否点击了模型
-        if (this.model.containsPoint(pixiPoint)) {
+        // 优先级 2: 点击模型
+        if (isOverModel) {
             this.isDragging = true;
             this.dragOffset.x = pixiPoint.x - this.model.x;
             this.dragOffset.y = pixiPoint.y - this.model.y;
             ipcRenderer.send('set-ignore-mouse-events', { ignore: false });
+            // 点击模型后，也直接返回
+            return;
+        }
+
+        // --- 新增逻辑：如果以上都不是，则判断是否需要关闭聊天框 ---
+        // 如果聊天框是可见的，并且点击事件没有发生在任何已知交互区域上，则关闭它
+        if (global.chatController && global.chatController.isVisible) {
+            global.chatController.hide();
         }
     });
 
@@ -172,9 +190,26 @@ setupInteractivity() {
         document.dispatchEvent(event);
     });
 
-    // --- 文件拖放逻辑 ---
     document.addEventListener('dragover', (event) => {
-        event.preventDefault();
+        const pixiPoint = new PIXI.Point();
+        this.app.renderer.plugins.interaction.mapPositionToPoint(pixiPoint, event.clientX, event.clientY);
+
+        if (this.model.containsPoint(pixiPoint)) {
+            // 当在模型上时，阻止默认行为，允许放置
+            event.preventDefault();
+            // 确保事件穿透是关闭的，以便可以接收 drop 事件
+            if (!this.isOverInteractiveArea) {
+                this.isOverInteractiveArea = true;
+                ipcRenderer.send('set-ignore-mouse-events', { ignore: false });
+            }
+        } else {
+            // --- 核心修复：当鼠标离开模型时，重新开启事件穿透 ---
+            // 这样拖拽事件就可以传递给下方的窗口（如文件夹）
+            if (this.isOverInteractiveArea) {
+                this.isOverInteractiveArea = false;
+                ipcRenderer.send('set-ignore-mouse-events', { ignore: true, options: { forward: true } });
+            }
+        }
     });
 
     document.addEventListener('drop', (event) => {
@@ -285,13 +320,28 @@ setupInteractivity() {
     });
 
     window.addEventListener('wheel', (e) => {
-        if (this.model.containsPoint(this.app.renderer.plugins.interaction.mouse.global)) {
-            e.preventDefault();
+        // 首先，获取鼠标在PIXI canvas内的坐标点
+        const pixiPoint = this.app.renderer.plugins.interaction.mouse.global;
+
+        // 核心修复：创建一个新的、更精确的判断条件，只检查鼠标是否在模型的可交互区域上
+        // 而不是使用我们之前重写的、包含了UI元素的 containsPoint 方法。
+        const isOverModelOnly = (
+            this.model && // 确保模型已加载
+            pixiPoint.x >= this.interactionX &&
+            pixiPoint.x <= this.interactionX + this.interactionWidth &&
+            pixiPoint.y >= this.interactionY &&
+            pixiPoint.y <= this.interactionY + this.interactionHeight
+        );
+
+        // 只有当鼠标确实只在模型上时，才执行缩放
+        if (isOverModelOnly) {
+            e.preventDefault(); // 阻止页面滚动等默认行为
 
             const scaleChange = e.deltaY > 0 ? 0.9 : 1.1;
             const currentScale = this.model.scale.x;
             const newScale = currentScale * scaleChange;
 
+            // 保持原有的缩放限制逻辑
             const minScale = this.model.scale.x * 0.3;
             const maxScale = this.model.scale.x * 3.0;
 
@@ -308,6 +358,7 @@ setupInteractivity() {
                 this.updateInteractionArea();
             }
         }
+        // 如果鼠标在聊天框或其他UI上，isOverModelOnly会为false，这里的代码不会执行，滚动事件会正常传递（例如滚动聊天记录等）
     }, { passive: false });
 
     window.addEventListener('resize', () => {

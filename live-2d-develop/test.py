@@ -389,6 +389,15 @@ class set_pyqt(QWidget):
     # 添加信号用于线程安全的日志更新
     log_signal = pyqtSignal(str)
     mcp_log_signal = pyqtSignal(str)
+    scan_complete_signal = pyqtSignal()
+
+    def _on_scan_complete(self):
+        """在主线程中安全地刷新UI"""
+        print("扫描完成，正在刷新UI...")
+        self.refresh_model_list()
+        self.load_motion_config()
+        self.refresh_drag_drop_interface()
+        print("UI刷新完成。")
 
     def __init__(self):
         super().__init__()
@@ -443,6 +452,16 @@ class set_pyqt(QWidget):
         # 备份原始配置
         self.original_config = None
         self.backup_original_config()
+
+        # --- 核心修复：连接后台扫描完成信号到UI刷新槽 ---
+        self.scan_complete_signal.connect(self._on_scan_complete)
+
+        # --- 性能优化：为MouseMove事件添加节流 ---
+        self.can_process_mousemove = True
+        self.mousemove_timer = QTimer(self)
+        self.mousemove_timer.setInterval(16)  # ~60 FPS
+        self.mousemove_timer.timeout.connect(lambda: setattr(self, 'can_process_mousemove', True))
+        self.mousemove_timer.start()
 
     def init_ui(self):
         # 设置无边框
@@ -1624,15 +1643,19 @@ class set_pyqt(QWidget):
     def eventFilter(self, obj, event):
         """全局事件过滤器 - 捕获所有鼠标事件"""
         if event.type() == QEvent.MouseMove:
-            # 将全局坐标转换为窗口本地坐标
-            if self.isVisible():
-                local_pos = self.mapFromGlobal(QCursor.pos())
-
-                if self.resizing and self.resize_edge:
-                    self.do_resize(QCursor.pos())
-                    return True
-                else:
-                    # 更新光标
+            # --- 核心修复：始终处理拖拽和缩放，不对其节流 ---
+            if self.resizing and self.resize_edge:
+                self.do_resize(QCursor.pos())
+                # 注意：这里不返回True，让事件可以继续传递给标题栏
+                # return True 
+            
+            # --- 性能优化：仅对光标样式的更新进行节流 ---
+            if self.can_process_mousemove and self.isVisible() and not self.isMinimized():
+                self.can_process_mousemove = False  # 立即锁定
+                
+                # 只有在不拖拽不缩放时才更新光标
+                if not self.resizing and not (event.buttons() & Qt.LeftButton):
+                    local_pos = self.mapFromGlobal(QCursor.pos())
                     edge = self.get_resize_edge(local_pos)
                     if edge and self.rect().contains(local_pos):
                         self.setCursor(self.get_resize_cursor(edge))
@@ -1643,12 +1666,17 @@ class set_pyqt(QWidget):
             if event.button() == Qt.LeftButton and self.isVisible():
                 local_pos = self.mapFromGlobal(QCursor.pos())
                 if self.rect().contains(local_pos):
-                    self.resize_edge = self.get_resize_edge(local_pos)
-                    if self.resize_edge:
-                        self.resizing = True
-                        self.resize_start_pos = QCursor.pos()
-                        self.resize_start_geometry = self.geometry()
-                        return True
+                    # 检查是否点击在自定义标题栏上
+                    if self.title_bar.geometry().contains(local_pos):
+                         # 如果在标题栏上，让标题栏自己处理拖拽
+                        pass
+                    else:
+                        self.resize_edge = self.get_resize_edge(local_pos)
+                        if self.resize_edge:
+                            self.resizing = True
+                            self.resize_start_pos = QCursor.pos()
+                            self.resize_start_geometry = self.geometry()
+                            return True
 
         elif event.type() == QEvent.MouseButtonRelease:
             if event.button() == Qt.LeftButton and self.resizing:
@@ -2345,11 +2373,22 @@ class set_pyqt(QWidget):
         self.ui.checkBox_voice_barge_in.setChecked(self.config['asr']['voice_barge_in'])
         self.ui.checkBox_game_minecraft.setChecked(self.config['game']['Minecraft']['enabled'])
 
-        # 新增：设置TTS语言下拉框
-        tts_language = self.ui.comboBox_tts_language.currentText().split(' - ')[0]
-        index = self.ui.comboBox_tts_language.findText(tts_language)
-        if index >= 0:
-            self.ui.comboBox_tts_language.setCurrentIndex(index)
+# 新增：设置TTS语言下拉框 (已修复BUG)
+        # 1. 从已加载的配置中读取保存的语言代码，如果不存在则默认为'zh'
+        saved_language = self.config.get('tts', {}).get('language', 'zh')
+        
+        # 2. 遍历下拉框中的所有选项
+        for i in range(self.ui.comboBox_tts_language.count()):
+            # 获取每个选项的文本，例如 "ja - 日语"
+            item_text = self.ui.comboBox_tts_language.itemText(i)
+            # 提取语言代码，例如 "ja"
+            item_language_code = item_text.split(' - ')[0]
+            
+            # 3. 如果选项的语言代码与保存的配置匹配
+            if item_language_code == saved_language:
+                # 4. 设置下拉框的当前选项为这一项，并停止查找
+                self.ui.comboBox_tts_language.setCurrentIndex(i)
+                break
 
         # 新增：设置翻译配置
         self.ui.checkBox_translation_enabled.setChecked(self.config['translation']['enabled'])
@@ -2746,6 +2785,10 @@ class set_pyqt(QWidget):
 
         with open(self.config_path, 'w', encoding='utf-8') as f:
             json.dump(current_config, f, ensure_ascii=False, indent=2)
+            
+        self.save_motion_config() 
+
+        
 
        # 尝试通知前端重新加载配置 (先检查服务是否运行)
         if is_server_running():
@@ -2931,22 +2974,27 @@ class set_pyqt(QWidget):
         """启动时自动运行皮套动作扫描"""
         try:
             app_path = get_app_path()
-            bat_file = os.path.join(app_path, "一键扫描皮套动作.bat")
+            script_file = os.path.join(app_path, "AI_set_live2d.py")
 
-            print(f"正在检查bat文件: {bat_file}")
+            print(f"正在检查脚本文件: {script_file}")
 
-            if os.path.exists(bat_file):
-                print("找到bat文件，正在后台启动...")
-                # 显示输出，但不阻塞UI
+            if os.path.exists(script_file):
+                print("找到扫描脚本，正在后台启动...")
+
+                # --- 核心修复：直接调用python执行脚本，而不是通过.bat和shell ---
+                # 'python' 会使用系统PATH中找到的python解释器，通常是当前激活的conda环境
+                command = ["python", script_file]
+
                 process = subprocess.Popen(
-                    bat_file,
-                    shell=True,
+                    command,
+                    shell=False,  # 设置为 False，避免创建额外的cmd进程
                     cwd=app_path,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
                     encoding='utf-8',
-                    errors='ignore'
+                    errors='ignore',
+                    creationflags=subprocess.CREATE_NO_WINDOW # 在Windows上不创建控制台窗口
                 )
 
                 # 启动线程读取输出
@@ -2954,12 +3002,14 @@ class set_pyqt(QWidget):
                     for line in iter(process.stdout.readline, ''):
                         if line.strip():
                             print(f"扫描输出: {line.strip()}")
+                    # --- 核心修复：扫描结束后，发射信号通知主线程刷新UI ---
+                    self.scan_complete_signal.emit()
 
                 from threading import Thread
                 Thread(target=read_output, daemon=True).start()
                 print("后台扫描进程已启动")
             else:
-                print(f"未找到bat文件: {bat_file}")
+                print(f"未找到扫描脚本: {script_file}")
 
         except Exception as e:
             print(f"运行皮套动作扫描失败: {str(e)}")

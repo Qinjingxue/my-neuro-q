@@ -3,6 +3,7 @@ const { app, BrowserWindow, ipcMain, screen, globalShortcut, desktopCapturer, di
 const path = require('path')
 const fs = require('fs')
 const { HttpServer } = require('./js/services/http-server.js')
+let isFirstLaunch = true; 
 const { ModelPathUpdater } = require('./js/model/model-path-updater.js')
 const { ShortcutManager } = require('./js/shortcut-manager.js')
 
@@ -78,12 +79,6 @@ function createWindow () {
         // 向渲染进程发送消息，通知其隐藏对话框
         win.webContents.send('window-blurred');
     })
-
-    setInterval(() => {
-        ensureTopMost(win)
-    }, 1000)
-    
-    
     return win
 }
 
@@ -102,6 +97,30 @@ app.whenReady().then(() => {
     // 注册全局快捷键
     const shortcutManager = new ShortcutManager();
     shortcutManager.registerAll();
+
+    ipcMain.handle('get-launch-status', (event) => {
+        const wasFirstLaunch = isFirstLaunch;
+        // 关键：在第一次查询后，立即将标志设为 false
+        isFirstLaunch = false; 
+        return wasFirstLaunch;
+    });
+
+    const { screen } = require('electron');
+
+    screen.on('display-metrics-changed', (event, display, changedMetrics) => {
+        // 使用一个短暂的延迟，以确保系统已经稳定
+        setTimeout(() => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                
+                // 1. 获取变化后最新的主屏幕尺寸
+                const primaryDisplay = screen.getPrimaryDisplay();
+                const { width, height } = primaryDisplay.workAreaSize;
+
+                // 2. 强制将窗口重置到新的屏幕尺寸和位置
+                mainWindow.setBounds({ x: 0, y: 0, width, height });
+            }
+        }, 1000); // 延迟1秒执行，给系统足够的时间来完成分辨率切换
+    });
 });
 
 
@@ -268,8 +287,6 @@ ipcMain.on('save-model-position', (event, position) => {
 
         // 保存到文件
         fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
-
-        console.log('模型位置已保存到配置文件:', position);
     } catch (error) {
         console.error('保存模型位置失败:', error);
     }
@@ -292,7 +309,6 @@ ipcMain.on('save-chatbox-position', (event, position) => {
 
         // 保存到 layout.json 文件
         fs.writeFileSync(layoutConfigPath, JSON.stringify(layoutConfig, null, 2), 'utf8');
-        console.log('聊天框位置已保存到 layout.json:', position);
     } catch (error) {
         console.error('保存聊天框位置到 layout.json 失败:', error);
     }
@@ -318,7 +334,6 @@ ipcMain.on('save-subtitle-position', (event, position) => {
             delete layoutConfig.subtitle_offset;
         }
         fs.writeFileSync(layoutConfigPath, JSON.stringify(layoutConfig, null, 2), 'utf8');
-        console.log('字幕位置已保存到 layout.json:', position);
     } catch (error) {
         console.error('保存字幕位置到 layout.json 失败:', error);
     }
@@ -341,12 +356,10 @@ ipcMain.on('save-subtitle-size', (event, size) => {
         }
         layoutConfig.subtitle_size = size;
         fs.writeFileSync(layoutConfigPath, JSON.stringify(layoutConfig, null, 2), 'utf8');
-        console.log('字幕尺寸已保存到 layout.json:', size);
     } catch (error) {
         console.error('保存字幕尺寸到 layout.json 失败:', error);
     }
 });
-
 
 // 新增：从渲染进程接收指令，恢复鼠标穿透
 ipcMain.on('set-mouse-forwarding', (event) => {
